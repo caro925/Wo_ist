@@ -13,7 +13,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:
 header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 16px;background:var(--card);border-bottom:3px solid var(--gold)}
 #q{font-size:clamp(1.2rem,3.2vw,2.4rem);font-weight:800;letter-spacing:.02em}
 #score{font-size:clamp(1.2rem,3vw,2.2rem);font-weight:800;white-space:nowrap}
-#map{flex:1;min-height:0;background:#cfd8e6}
+#map{flex:1;min-height:0;background:#a9c8e4}
 footer{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;background:var(--card)}
 #msg{flex:1;min-width:160px;font-size:clamp(1rem,2vw,1.5rem)}
 button{font:inherit;font-weight:800;padding:12px 18px;border:0;border-radius:10px;background:var(--gold);color:#14162a;cursor:pointer}
@@ -43,6 +43,7 @@ button:focus-visible,a:focus-visible{outline:3px solid #fff;outline-offset:2px}
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {getDatabase,ref,onValue,set,update,remove} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
@@ -103,9 +104,21 @@ const db = getDatabase(initializeApp(CONFIG));
 const sRef = ref(db, `rooms/${room}/state`), gRef = ref(db, `rooms/${room}/guess`);
 let S = {}, G = {}, mine = null, lastKey = "", lastRound = -1, busy = false;
 
-const map = L.map("map", {worldCopyJump: true, minZoom: 2, zoomSnap: .5}).setView([30, 10], 2);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
-  {attribution: "© OpenStreetMap-Mitwirkende © CARTO", maxZoom: 8}).addTo(map);
+const WORLD = [[-58, -170], [80, 180]];
+const map = L.map("map", {minZoom: 0, maxZoom: 7, zoomSnap: .5,
+  maxBounds: [[-85, -180], [85, 180]], maxBoundsViscosity: 1});
+map.fitBounds(WORLD);
+map.attributionControl.setPrefix(false);
+map.attributionControl.addAttribution("Kartendaten: Natural Earth");
+// Länderflächen ohne Beschriftung, kostenlos aus dem Netz geladen
+fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json")
+  .then(r => r.json())
+  .then(w => {
+    const fc = topojson.feature(w, w.objects.countries);
+    fc.features = fc.features.filter(f => (f.properties || {}).name !== "Antarctica");
+    L.geoJSON(fc, {interactive: false, style: {color: "#7d8aa3", weight: 1, fillColor: "#f1efe6", fillOpacity: 1}}).addTo(map).bringToBack();
+  })
+  .catch(() => { $("msg").textContent = "Karte konnte nicht geladen werden. Seite neu laden."; });
 const layer = L.layerGroup().addTo(map);
 const wrap = lng => ((lng + 540) % 360) - 180;
 const km = (a, b) => {
@@ -157,7 +170,7 @@ function render() {
   const sc = S.score || {}, s1 = sc.p1 || 0, s2 = sc.p2 || 0, ph = S.phase || "idle", R = S.reveal;
   const over = s1 >= WIN_POINTS || s2 >= WIN_POINTS;
   $("score").innerHTML = `<span style="color:var(--p1)">${N.p1} ${s1}</span> : <span style="color:var(--p2)">${s2} ${N.p2}</span>`;
-  if ((S.round || 0) !== lastRound) { lastRound = S.round || 0; mine = null; map.setView([30, 10], 2); }
+  if ((S.round || 0) !== lastRound) { lastRound = S.round || 0; mine = null; map.fitBounds(WORLD); }
 
   layer.clearLayers();
   let q = "Bereit?", m = "";
