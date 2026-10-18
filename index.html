@@ -43,7 +43,6 @@ button:focus-visible,a:focus-visible{outline:3px solid #fff;outline-offset:2px}
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {getDatabase,ref,onValue,set,update,remove} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
@@ -109,16 +108,20 @@ const map = L.map("map", {minZoom: 0, maxZoom: 7, zoomSnap: .5,
   maxBounds: [[-85, -180], [85, 180]], maxBoundsViscosity: 1});
 map.fitBounds(WORLD);
 map.attributionControl.setPrefix(false);
-map.attributionControl.addAttribution("Kartendaten: Natural Earth");
-// Länderflächen ohne Beschriftung, kostenlos aus dem Netz geladen
-fetch("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json")
-  .then(r => r.json())
-  .then(w => {
-    const fc = topojson.feature(w, w.objects.countries);
-    fc.features = fc.features.filter(f => (f.properties || {}).name !== "Antarctica");
-    L.geoJSON(fc, {interactive: false, style: {color: "#7d8aa3", weight: 1, fillColor: "#f1efe6", fillOpacity: 1}}).addTo(map).bringToBack();
-  })
-  .catch(() => { $("msg").textContent = "Karte konnte nicht geladen werden. Seite neu laden."; });
+map.attributionControl.addAttribution("NASA Blue Marble · GIBS");
+// NASA Blue Marble: Satellitenlook mit Relief, ohne Beschriftung und ohne Grenzen (kostenlos, ohne Key)
+const GIBS = [
+  "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/EPSG3857_500m/{z}/{y}/{x}.jpeg",
+  "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default//EPSG3857_500m/{z}/{y}/{x}.jpeg"
+];
+let gi = 0, tilesOk = false;
+const base = L.tileLayer(GIBS[0], {maxNativeZoom: 7, maxZoom: 7, noWrap: true}).addTo(map);
+base.on("tileload", () => { tilesOk = true; });
+base.on("tileerror", () => {
+  if (tilesOk) return;
+  if (gi < GIBS.length - 1) { gi++; base.setUrl(GIBS[gi]); }
+  else $("msg").textContent = "Karte konnte nicht geladen werden. Seite neu laden.";
+});
 const layer = L.layerGroup().addTo(map);
 const wrap = lng => ((lng + 540) % 360) - 180;
 const km = (a, b) => {
